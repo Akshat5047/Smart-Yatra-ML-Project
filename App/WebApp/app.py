@@ -3428,7 +3428,7 @@ def render_predictive():
     primary_district = cart[0]["district"]
     st.table(pd.DataFrame({
         "Field": ["Spots Selected", "Primary District", "Start Date", "Duration (days)", "Travelers", "Your Budget"],
-        "Value": [len(cart), primary_district, str(start_date), duration_days, num_travelers, f"₹{user_budget:,.0f}"]
+        "Value": [str(len(cart)), str(primary_district), str(start_date), str(duration_days), str(num_travelers), f"₹{user_budget:,.0f}"]
     }))
 
     # ============================================================
@@ -3867,7 +3867,7 @@ def render_route_trip():
         transport_mode = plan["transport_result"]["recommended_transport_mode"].upper() if plan and plan.get("transport_result") else "Not available yet"
         st.table(pd.DataFrame({
             "Field": ["Stops", "Estimated Road Distance", "Estimated Drive Time", "Suggested Transport"],
-            "Value": [len(cart), distance, duration, transport_mode],
+            "Value": [str(len(cart)), str(distance), str(duration), str(transport_mode)],
         }))
 
         if leg_breakdown:
