@@ -98,7 +98,7 @@ ML Project Batch-1/
 ├── Notebooks/                 # Model training notebooks
 ├── .gitignore
 └── README.md
-```
+---
 
 ## API Endpoints
 
@@ -128,6 +128,12 @@ All prediction endpoints log to Supabase through a `_safe_insert_prediction()` w
 - [ ] Expand routing to factor predicted trip distance directly into the Budget model's input
 - [ ] Add live event/festival feed beyond the static calendar
 - [ ] Broaden dataset coverage beyond Telangana
+
+---
+
+## License
+
+*(Add your license here — MIT is a common choice for student/portfolio projects.)*
 
 ---
 
