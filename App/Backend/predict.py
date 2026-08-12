@@ -13,7 +13,7 @@ from torch import nn
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
-PICKLES_DIR = os.path.join(PROJECT_ROOT, "Pickles")
+PICKLES_DIR = os.path.join(BASE_DIR, "..", "Pickles")
 DB_PATH = os.path.join(PROJECT_ROOT, "Data", "smart_tourism.db")
 
 VALID_BUDGET_ACCOMMODATION_TIERS = {"budget", "mid", "premium"}
