@@ -100,51 +100,6 @@ ML Project Batch-1/
 └── README.md
 ```
 
----
-
-## Setup & Installation
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/Akshat5047/Smart-Yatra-ML-Project.git
-cd Smart-Yatra-ML-Project
-```
-
-### 2. Create a virtual environment
-```bash
-python -m venv venv
-.\venv\Scripts\Activate.ps1        # Windows PowerShell
-```
-
-### 3. Install dependencies
-```bash
-pip install -r App/Backend/requirements.txt
-pip install -r App/Frontend/requirements.txt
-```
-
-### 4. Set up environment variables
-Create a `.env` file at the project root:
-```
-SUPABASE_URL=your-supabase-project-url
-SUPABASE_KEY=your-supabase-service-role-key
-```
-
-### 5. Run the backend
-```bash
-cd App/Backend
-uvicorn main:app --reload
-```
-
-### 6. Run the frontend (in a separate terminal)
-```bash
-cd App/Frontend
-streamlit run app.py
-```
-
-The app opens at `http://localhost:8501`; the API serves at `http://127.0.0.1:8000` (interactive docs at `/docs`).
-
----
-
 ## API Endpoints
 
 | Endpoint | Method | Purpose |
@@ -173,12 +128,6 @@ All prediction endpoints log to Supabase through a `_safe_insert_prediction()` w
 - [ ] Expand routing to factor predicted trip distance directly into the Budget model's input
 - [ ] Add live event/festival feed beyond the static calendar
 - [ ] Broaden dataset coverage beyond Telangana
-
----
-
-## License
-
-*(Add your license here — MIT is a common choice for student/portfolio projects.)*
 
 ---
 
