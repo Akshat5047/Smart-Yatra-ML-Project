@@ -78,12 +78,18 @@ ACCOMMODATION_TIER_ALIASES = {
 VALID_BUDGET_TRANSPORT_MODES = {"auto", "bike", "bus", "car", "train"}
 
 # ---- Budget ----
-budget_model = joblib.load(os.path.join(PICKLES_DIR, "Budget", "best_trip_cost_model.pkl"))
+@st.cache_resource(show_spinner="Loading budget model...")
+def _get_budget_model():
+    return joblib.load(os.path.join(PICKLES_DIR, "Budget", "best_trip_cost_model.pkl"))
+
 
 cost_cols = ['travel_cost_est', 'stay_cost_est', 'food_cost_est', 'entry_fees_est', 'tolls_and_parking_est']
 
 
-def _build_budget_preprocessor():
+@st.cache_resource(show_spinner="Loading budget model...")
+def _get_budget_preprocessor():
+    """Loaded lazily, only the first time predict_budget() is actually called —
+    not at app startup — and cached after that via st.cache_resource."""
     conn = sqlite3.connect(DB_PATH)
     raw_df = pd.read_sql("SELECT * FROM trip_budget_prediction;", conn)
     conn.close()
@@ -102,9 +108,6 @@ def _build_budget_preprocessor():
     ])
     preprocessor.fit(X_train)
     return preprocessor
-
-
-budget_preprocessor = _build_budget_preprocessor()
 
 
 def _normalize_budget_inputs(trip: dict) -> dict:
@@ -126,6 +129,8 @@ def _normalize_budget_inputs(trip: dict) -> dict:
 
 def predict_budget(trip: dict) -> dict:
     trip = _normalize_budget_inputs(trip)
+    budget_model = _get_budget_model()
+    budget_preprocessor = _get_budget_preprocessor()
 
     new_trip = pd.DataFrame([{
         'duration_days': trip['duration_days'],
@@ -145,16 +150,23 @@ def predict_budget(trip: dict) -> dict:
 
 
 # ---- Crowd (mean-encoding pipeline) ----
-crowd_model = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "crowd_model.pkl"))
-crowd_preprocessor = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "preprocessor.pkl"))
-crowd_spot_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "spot_mean_map.pkl"))
-crowd_district_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "district_mean_map.pkl"))
-crowd_month_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "month_mean_map.pkl"))
-crowd_season_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "season_mean_map.pkl"))
-crowd_global_mean = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "global_visitor_mean.pkl"))
+@st.cache_resource(show_spinner="Loading crowd model...")
+def _get_crowd_resources():
+    """Loaded lazily, only the first time predict_crowd() is actually called."""
+    model = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "crowd_model.pkl"))
+    preprocessor = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "preprocessor.pkl"))
+    spot_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "spot_mean_map.pkl"))
+    district_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "district_mean_map.pkl"))
+    month_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "month_mean_map.pkl"))
+    season_mean_map = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "season_mean_map.pkl"))
+    global_mean = joblib.load(os.path.join(PICKLES_DIR, "Crowd", "global_visitor_mean.pkl"))
+    return model, preprocessor, spot_mean_map, district_mean_map, month_mean_map, season_mean_map, global_mean
 
 
 def predict_crowd(data: dict) -> dict:
+    (crowd_model, crowd_preprocessor, crowd_spot_mean_map, crowd_district_mean_map,
+     crowd_month_mean_map, crowd_season_mean_map, crowd_global_mean) = _get_crowd_resources()
+
     new_row = pd.DataFrame([data])
 
     new_row['spot_name_mean'] = new_row['spot_name'].map(crowd_spot_mean_map).fillna(crowd_global_mean)
@@ -185,21 +197,24 @@ class ClimateLSTM(nn.Module):
         return out
 
 
-climate_meta = joblib.load(os.path.join(PICKLES_DIR, "Climate", "best_climate_metadata.pkl"))
-seq_len = climate_meta['seq_len']
-last_known_date = climate_meta['last_known_date']
-target_cols = climate_meta['target_cols']
+@st.cache_resource(show_spinner="Loading climate model...")
+def _get_climate_resources():
+    """Loaded lazily, only the first time predict_climate() is actually called —
+    this is the heaviest module (torch LSTM + a 346k-row SQL read), so deferring
+    it matters most here."""
+    climate_meta = joblib.load(os.path.join(PICKLES_DIR, "Climate", "best_climate_metadata.pkl"))
+    seq_len = climate_meta['seq_len']
+    last_known_date = climate_meta['last_known_date']
+    target_cols = climate_meta['target_cols']
 
-climate_model = ClimateLSTM(input_size=len(target_cols), hidden_size=24, num_layers=1, output_size=len(target_cols), dropout=0.2)
-climate_state_dict = torch.load(
-    os.path.join(PICKLES_DIR, "Climate", "best_climate_lstm_model.pt.zip"),
-    map_location="cpu", weights_only=True
-)
-climate_model.load_state_dict(climate_state_dict)
-climate_model.eval()
+    model = ClimateLSTM(input_size=len(target_cols), hidden_size=24, num_layers=1, output_size=len(target_cols), dropout=0.2)
+    state_dict = torch.load(
+        os.path.join(PICKLES_DIR, "Climate", "best_climate_lstm_model.pt.zip"),
+        map_location="cpu", weights_only=True
+    )
+    model.load_state_dict(state_dict)
+    model.eval()
 
-
-def _load_climate_history_for_lstm():
     conn = sqlite3.connect(DB_PATH)
     raw = pd.read_sql("SELECT * FROM climate_dataset", conn)
     conn.close()
@@ -217,13 +232,12 @@ def _load_climate_history_for_lstm():
     district_daily = raw.groupby(['District', 'Date'])[target_cols].mean()
     district_baseline = district_daily.xs(last_known_date, level='Date')
 
-    return diffed, district_baseline
-
-
-climate_diffed, climate_district_baseline = _load_climate_history_for_lstm()
+    return model, seq_len, last_known_date, target_cols, diffed, district_baseline
 
 
 def predict_climate(data: dict) -> dict:
+    climate_model, seq_len, last_known_date, target_cols, climate_diffed, climate_district_baseline = _get_climate_resources()
+
     forecast_date = pd.Timestamp(data['forecast_date'])
     days_ahead = (forecast_date - last_known_date).days
 
@@ -266,12 +280,20 @@ transport_feature_cols = [
     "rainfall_mm",
     "road_access_rating",
 ]
-transport_model = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_model.pkl"))
-transport_scaler = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_scaler.pkl"))
-transport_label_encoder = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_label_encoder.pkl"))
+
+
+@st.cache_resource(show_spinner="Loading transport mode model...")
+def _get_transport_resources():
+    """Loaded lazily, only the first time predict_transport_mode() is actually called."""
+    model = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_model.pkl"))
+    scaler = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_scaler.pkl"))
+    label_encoder = joblib.load(os.path.join(PICKLES_DIR, "transport_mode_label_encoder.pkl"))
+    return model, scaler, label_encoder
 
 
 def predict_transport_mode(data: dict) -> dict:
+    transport_model, transport_scaler, transport_label_encoder = _get_transport_resources()
+
     new_row = pd.DataFrame([{
         'distance_km': data['distance_km'],
         'budget_limit': data['budget_limit'],
